@@ -1,3 +1,5 @@
+// app/(tabs)/index.tsx
+
 import { Image, StyleSheet, Platform, View } from 'react-native';
 import React from 'react';
 import { HelloWave } from '@/components/HelloWave';

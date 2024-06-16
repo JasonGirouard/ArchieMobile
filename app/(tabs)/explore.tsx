@@ -1,11 +1,16 @@
+// app/(tabs)/explore.tsx
+
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Linking, Dimensions, Platform } from 'react-native';
 import Collapsible from 'react-native-collapsible';
 import { WebView } from 'react-native-webview';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SettingsScreen() {
   const [isFAQCollapsed, setIsFAQCollapsed] = useState(true);
   const [isFeedbackCollapsed, setIsFeedbackCollapsed] = useState(true);
+
+  AsyncStorage.removeItem('hasLaunched');
 
   const toggleFAQ = () => {
     setIsFAQCollapsed(!isFAQCollapsed);
