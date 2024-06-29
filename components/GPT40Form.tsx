@@ -1,6 +1,6 @@
 // components/GPT4OForm.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import {
   View,
   TextInput,
@@ -19,11 +19,18 @@ import {
 import { ScrollView } from "react-native-virtualized-view";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import { UIImagePickerPresentationStyle } from 'expo-image-picker/build/ImagePicker.types';
 import * as MediaLibrary from "expo-media-library";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import axios from "axios";
 import Markdown from 'react-native-markdown-display';
 import * as FileSystem from "expo-file-system";
+import NotFoundScreen from "@/app/+not-found";
+
+export interface GPT4OFormRef {
+  handleTakePhoto: () => Promise<void>;
+}
+
 
 // Define the type for the question object
 type Question = {
@@ -40,7 +47,7 @@ interface Message {
 
 const screenWidth = Dimensions.get("window").width;
 
-const GPT4OForm = () => {
+const GPT4OForm = forwardRef<GPT4OFormRef, {}>((props, ref) => {
   const [inputText, setInputText] = useState<string>("");
   const [response, setResponse] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -50,6 +57,11 @@ const GPT4OForm = () => {
   const [customQuestion, setCustomQuestion] = useState<string>("");
   const customQuestionInputRef = useRef<TextInput>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+
+  useImperativeHandle(ref, () => ({
+    handleTakePhoto,
+  }));
+
 
   useEffect(() => {
     if (messages) {
@@ -179,55 +191,112 @@ const GPT4OForm = () => {
 
  
 
-  const handleTakePhoto = async () => {
-    setInputText("");
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert("Permission Denied", "Permission to access camera is required!");
-      return;
-    }
+//   const handleTakePhoto = async () => {
+//     setInputText("");
+//     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+//     if (permissionResult.granted === false) {
+//       Alert.alert("Permission Denied", "Permission to access camera is required!");
+//       return;
+//     }
 
-    const pickerResult = await ImagePicker.launchCameraAsync({
-     // mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow all media types including heic
+//     const pickerResult = await ImagePicker.launchCameraAsync({
+//      // mediaTypes: ImagePicker.MediaTypeOptions.Images,
+//       mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow all media types including heic
+//       allowsEditing: true,
+//       quality: .7,
+//       base64: true,
+//      // presentationStyle: 'overFullScreen',
+//     });
+
+//   if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
+//     setIsLoading(true)
+//     const selectedAsset = pickerResult.assets[0];
+//     try {
+//       let manipulatedImage;
+//       if (selectedAsset.uri.endsWith('.heic')) {
+//         manipulatedImage = await ImageManipulator.manipulateAsync(
+//           selectedAsset.uri,
+//           [],
+//           { format: ImageManipulator.SaveFormat.JPEG, base64: true, compress: 0 }
+//         );
+//       } else {
+//         manipulatedImage = await ImageManipulator.manipulateAsync(
+//           selectedAsset.uri,
+//           [],
+//           { base64: true, compress: 0 }
+//         );
+//       }
+//       setImageUri(`data:image/jpeg;base64,${manipulatedImage.base64}`);
+//     } catch (error) {
+//       console.error("Error manipulating image:", error);
+//       Alert.alert("Error", "Failed to manipulate the image.");
+//     }
+//   }
+// };
+
+const handleTakePhoto = async () => {
+  setInputText("");
+  const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+  const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  
+  if (cameraPermission.granted === false || libraryPermission.granted === false) {
+    Alert.alert("Permission Denied", "Camera and media library permissions are required!");
+    return;
+  }
+
+  const pickerResult = await ImagePicker.launchCameraAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.All,
+    allowsEditing: true,
+    quality: 0.7,
+    base64: true,
+  });
+
+  if (pickerResult.canceled) {
+    // If the user cancels taking a photo, offer the option to choose from library
+    const libraryResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
-      quality: .7,
+      quality: 0.7,
       base64: true,
     });
 
-    // previous methodology
-  //   if (
-  //     !pickerResult.canceled &&
-  //     pickerResult.assets &&
-  //     pickerResult.assets.length > 0
-  //   ) {
-  //     setImageUri(pickerResult.assets[0].uri);
-  //     console.log(pickerResult.assets[0].uri.substring(5, 30));
-  //   }
-  // };
-  if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
-    setIsLoading(true)
-    const selectedAsset = pickerResult.assets[0];
-    try {
-      let manipulatedImage;
-      if (selectedAsset.uri.endsWith('.heic')) {
-        manipulatedImage = await ImageManipulator.manipulateAsync(
-          selectedAsset.uri,
-          [],
-          { format: ImageManipulator.SaveFormat.JPEG, base64: true, compress: 0 }
-        );
-      } else {
-        manipulatedImage = await ImageManipulator.manipulateAsync(
-          selectedAsset.uri,
-          [],
-          { base64: true, compress: 0 }
-        );
-      }
-      setImageUri(`data:image/jpeg;base64,${manipulatedImage.base64}`);
-    } catch (error) {
-      console.error("Error manipulating image:", error);
-      Alert.alert("Error", "Failed to manipulate the image.");
+    if (!libraryResult.canceled && libraryResult.assets && libraryResult.assets.length > 0) {
+      await processImage(libraryResult.assets[0]);
     }
+  } else if (pickerResult.assets && pickerResult.assets.length > 0) {
+    await processImage(pickerResult.assets[0]);
+  }
+};
+
+const processImage = async (selectedAsset: ImagePicker.ImagePickerAsset) => {
+  setIsLoading(true);
+  try {
+    let manipulatedImage;
+    if (selectedAsset.uri.endsWith('.heic')) {
+      manipulatedImage = await ImageManipulator.manipulateAsync(
+        selectedAsset.uri,
+        [],
+        { format: ImageManipulator.SaveFormat.JPEG, base64: true, compress: 0 }
+      );
+    } else {
+      manipulatedImage = await ImageManipulator.manipulateAsync(
+        selectedAsset.uri,
+        [],
+        { base64: true, compress: 0 }
+      );
+    }
+    
+    if (manipulatedImage.base64) {
+      setImageUri(`data:image/jpeg;base64,${manipulatedImage.base64}`);
+    } else {
+      console.error("No base64 data found in manipulated image.");
+      Alert.alert("Error", "Failed to process the image.");
+    }
+  } catch (error) {
+    console.error("Error manipulating image:", error);
+    Alert.alert("Error", "Failed to manipulate the image.");
+  } finally {
+    setIsLoading(false);
   }
 };
 
@@ -444,9 +513,9 @@ const GPT4OForm = () => {
 
   return (
     <>
-      <KeyboardAwareScrollView>
+      <KeyboardAwareScrollView contentContainerStyle={styles.scrollViewContent}>
         <>
-          <View style={styles.iconContainer}>
+          {/* <View style={styles.iconContainer}>
             <TouchableOpacity onPress={handleImageUpload}>
               <Image
                 source={require("@/assets/images/images.png")}
@@ -459,12 +528,12 @@ const GPT4OForm = () => {
                 style={styles.icon}
               />
             </TouchableOpacity>
-          </View>
+          </View> */}
         </>
         {!imageUri && (
           <View style={styles.introMessageContainer}>
             <Text style={styles.introText}>
-              Upload or take a photo to start learning about Architecture
+              Take a photo to start.
             </Text>
           </View>
         )}
@@ -520,9 +589,12 @@ const GPT4OForm = () => {
       </KeyboardAwareScrollView>
     </>
   );
-};
+});
 
 const styles = StyleSheet.create({
+  scrollViewContent: {
+    padding: 32,
+  },
   introMessageContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -614,6 +686,7 @@ const styles = StyleSheet.create({
   activityIndicatorContainer: {
     padding: 20, // Adjust the padding as needed
   },
+  
 });
 
 export default GPT4OForm;
