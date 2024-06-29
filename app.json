@@ -2,7 +2,7 @@
   "expo": {
     "name": "Archie",
     "slug": "ArchieMobile",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "archie",
@@ -14,13 +14,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.thearchieapp.mobile"
+      "bundleIdentifier": "com.thearchieapp.mobile",
+      "buildNumber": "2" 
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "versionCode": 2,
       "package": "com.thearchieapp.mobile"
     },
     "web": {
